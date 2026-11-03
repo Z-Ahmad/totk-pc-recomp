@@ -47,8 +47,10 @@ MacNativeGames cannot run on x86-64 as is: its CPU path executes ARM64 code nati
   guest function to runtime C while its set is on. The generator emits the lifted body as `f_<addr>_orig` and
   `f_<addr>` as a stub that calls `<c_function>(c, f_<addr>_orig)`; direct calls, tail branches and the dispatch
   table all use `f_<addr>`, so one hook sees every caller. Hooks live in `runtime/hooks/`, one file per feature, and
-  call further game code with `rt_call` (`runtime/host.h`). `runtime/hooks/probe.c` (set `hook_probe`,
-  `TOTK_HOOK_PROBE=1`) logs the present-interval controller's calls and is the example. Design after SkyboundTotk's
+  call further game code with `rt_call` (`runtime/host.h`). `runtime/hooks/frame.c` (set `frame`, on by
+  default) runs after the present-interval controller, once per frame on a game thread: `TOTK_HOOK_PROBE=1` logs its
+  calls, and it applies the GameData flag writes of the roguelike's dev panel (`runtime/hooks/rogue_flags.c`,
+  `runtime/ui/rogue_dev.cpp`, `TOTK_ROGUE_DEV=1`). Design after SkyboundTotk's
   `ENTRY_HOOK` (MIT, github.com/NotRexed/SkyboundTotk); no code was copied.
 - Testing: LAS Recomp's differential harness, every lifted instruction class checked against Unicorn (test-only, never linked into the game).
 

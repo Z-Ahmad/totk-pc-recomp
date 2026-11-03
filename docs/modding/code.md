@@ -56,9 +56,14 @@ This is where the roguelike's run director belongs: C in `runtime/` that runs wh
   `f_<addr>`, which every direct call, tail branch and the dispatch table use, call
   `void <c_function>(Cpu *c, void (*orig)(Cpu *c))` while the set is on. The hook sees the arguments in `c->x[0..7]`,
   runs the original with `orig(c)` before, after or not at all, and leaves the result in `c->x[0]`. Hook code goes in
-  `runtime/hooks/<feature>.c` (compiled automatically). Example: `runtime/hooks/probe.c`, set `hook_probe`
-  (`TOTK_HOOK_PROBE=1`), which logs a function that runs once per frame. The offset must be a function start (the
-  generator checks).
+  `runtime/hooks/<feature>.c` (compiled automatically). Example: `runtime/hooks/frame.c`, set `frame`,
+  which runs once per frame on a game thread (`TOTK_HOOK_PROBE=1` logs it). The offset must be a function start (the
+  generator checks). One function takes one hook: features that need a per-frame game thread add a call there.
+- **GameData flags from C** (`runtime/hooks/rogue_flags.c`): `rogue_flag_request(name, value)` queues a bool write
+  that the frame hook applies with the game's own setBool (1.2.1 `main+0xb20a48`; the manager pointer through
+  `main+0x462e3d8`; the hash is murmur3_32 of the name, seed 0). The dev panel (`runtime/ui/rogue_dev.cpp`) shows the
+  flags listed in `rogue-dev-flags.txt` next to `totk.exe` with true/false buttons beside the F1 menu while
+  `TOTK_ROGUE_DEV=1`. setBool only takes flags of the game's table; a hash it does not know goes to another store.
 - **Host functions at a guest address** (`runtime/dispatch.h` rt_register_host), the older per-call-site way. A host C function registered at an
   address on the patch page is what a guest `bl` to that address runs. The working example is the `zstd` set of
   `recomp/patches-v143.txt` with `runtime/ov_zstd.c`: each call site of the game's zstd decoder becomes

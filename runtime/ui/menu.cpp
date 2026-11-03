@@ -57,6 +57,7 @@ extern const int rt_game_version;
 extern const char rt_port_version[];
 void cheats_frame(uint64_t frame);   // cheats.c
 bool tab_cheats(float scale);        // ui/cheats_tab.cpp; true: restart into the rebuild
+extern "C" void rogue_dev_draw(float scale);   // ui/rogue_dev.cpp: the roguelike's dev panel (TOTK_ROGUE_DEV)
 }
 
 // Roboto Medium (Apache-2.0, ui/fonts/LICENSE-Roboto.txt) with Latin and Cyrillic glyphs.
@@ -1517,6 +1518,7 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
     if (open) layout_menu(t->width, t->height, scale);
+    if (open) rogue_dev_draw(scale);
     perf_draw(t, scale);
     ImGui::Render();
     if (open) g_save_pending = opt_save_tick(0);

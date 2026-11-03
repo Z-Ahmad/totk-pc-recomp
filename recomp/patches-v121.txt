@@ -969,7 +969,9 @@ spin sdk 3d3250 3d3270   # 9 instructions; loads
 # computation). Found by a write watch on the size field (the writer was this function, and no other).
 site shadow main cec22c 11001d6b @page:x11 b9405d6b 11001d6b   # add w11, w11, #7 -> adrp x11, page; ldr w11, [x11, #92]; add w11, w11, #7
 
-# Function hooks (recomp/patches.py `hook`, runtime/hooks/). hook_probe proves the mechanism: runtime/hooks/probe.c logs
-# the calls of the present-interval controller (main+0x8f26c8, the fps60 sets' function) and changes nothing.
-set hook_probe TOTK_HOOK_PROBE 0
-hook hook_probe main 8f26c8 hook_probe_present_interval
+# Function hooks (recomp/patches.py `hook`, runtime/hooks/). frame: runtime/hooks/frame.c runs after the
+# present-interval controller (main+0x8f26c8, the fps60 sets' function, once per presented frame on a game thread): the
+# TOTK_HOOK_PROBE log and the GameData writes of the roguelike's dev panel (hooks/rogue_flags.c). Changes nothing when
+# neither is used.
+set frame TOTK_FRAME_HOOK 1
+hook frame main 8f26c8 hook_frame
