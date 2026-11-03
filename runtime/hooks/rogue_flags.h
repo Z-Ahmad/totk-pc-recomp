@@ -11,6 +11,8 @@ typedef struct Cpu Cpu;
 
 uint32_t rogue_flag_hash(const char *name);               // murmur3_32 of the flag name, seed 0 (GameDataList keys)
 int rogue_flag_request(const char *name, int value);     // queue setBool(name, value); 0 when the queue is full
+int rogue_flag_set_now(Cpu *c, const char *name, int value);   // on a game thread: setBool at once; 0 before the
+                                                          // manager exists
 void rogue_flags_frame(Cpu *c);                           // per-frame hook: apply the queued writes
 const char *rogue_flags_status(void);                     // the last applied write, for the panel ("" before any)
 int rogue_dev_enabled(void);                              // TOTK_ROGUE_DEV set and not 0

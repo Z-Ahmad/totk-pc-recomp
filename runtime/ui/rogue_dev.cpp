@@ -9,6 +9,7 @@
 #include "imgui_internal.h"   // BringWindowToDisplayFront: the menu window is full screen and drawn first
 
 #include "hooks/rogue_flags.h"
+#include "hooks/rogue_run.h"
 extern "C" {
 #include "platform/platform.h"
 }
@@ -66,6 +67,12 @@ extern "C" void rogue_dev_draw(float scale) {
         if (ImGui::SmallButton("false")) rogue_flag_request(g_names[i], 0);
         ImGui::PopID();
     }
+    ImGui::Separator();
+    ImGui::TextUnformatted("Run (rogue-run.txt)");
+    if (ImGui::SmallButton("Start run")) rogue_run_command(ROGUE_RUN_START);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Stop run")) rogue_run_command(ROGUE_RUN_STOP);
+    ImGui::Text("%s", rogue_run_status());
     const char *st = rogue_flags_status();
     ImGui::Separator();
     ImGui::Text("Last write: %s", st[0] ? st : "none");

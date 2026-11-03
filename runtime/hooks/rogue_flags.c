@@ -63,11 +63,28 @@ int rogue_flag_request(const char *name, int value) {
     return 1;
 }
 
+static uint64_t manager(void) {
+    const uint64_t global = *(volatile uint64_t *)(MOD_MAIN_BASE + GMD_MGR_GLOBAL_PTR);
+    return global ? *(volatile uint64_t *)global : 0;
+}
+
+int rogue_flag_set_now(Cpu *c, const char *name, int value) {
+    const uint64_t mgr = manager();
+    if (!mgr) return 0;
+    uint64_t saved[8];
+    memcpy(saved, c->x, sizeof saved);
+    const uint32_t hash = rogue_flag_hash(name);
+    rt_call(c, MOD_MAIN_BASE + GMD_SET_BOOL, 3, mgr, (uint64_t)(value != 0), (uint64_t)hash);
+    memcpy(c->x, saved, sizeof saved);
+    snprintf(status, sizeof status, "%s = %s (hash %u)", name, value ? "true" : "false", hash);
+    rt_log("rogue: setBool %s", status);
+    return 1;
+}
+
 void rogue_flags_frame(Cpu *c) {
     uint32_t tail = __atomic_load_n(&q_tail, __ATOMIC_RELAXED);
     if (tail == __atomic_load_n(&q_head, __ATOMIC_ACQUIRE)) return;
-    const uint64_t global = *(volatile uint64_t *)(MOD_MAIN_BASE + GMD_MGR_GLOBAL_PTR);
-    const uint64_t mgr = global ? *(volatile uint64_t *)global : 0;
+    const uint64_t mgr = manager();
     if (!mgr) return;   // the manager does not exist yet (boot); try again next frame
     uint64_t saved[8];
     memcpy(saved, c->x, sizeof saved);   // the hooked function's result and the caller's argument registers

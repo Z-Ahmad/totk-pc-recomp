@@ -28,10 +28,15 @@ wiring is ours; **open** = not yet known to be possible.
 |---|---|---|
 | Chamber exit sealed until cleared | `StopCeilingClipperAreaNoMerge` with `Presence {FlagName, IsNegation}`; Ascend allowed underground by an `Area` + `EnableUseUndergroundCeilingClipperArea` AI group (Depths tiles do this) | known: tested in game (Lookout Landing shelter, 2026-11-02): the blocker appears and disappears the moment the flag changes, even while Ascend is aimed at the ceiling |
 | Setting run flags | `runtime/hooks/rogue_flags.c` (the game's setBool), dev panel `TOTK_ROGUE_DEV=1` | known (built) |
-| Chamber cleared | defeat queries / counter flag in data, or a hook on enemy death | open |
-| Moving to the next chamber | warp to a named `DestinationAnchor` after the Ascend | open |
+| Chamber cleared | `runtime/hooks/rogue_run.c`: no running `Enemy_*` actor with health above 0 within the chamber's radius (the game's process list under its lock; health chain from BotW Abilities' Fury) sets the clear flag | likely: built, in-game test pending |
+| Moving to the next chamber | once cleared and the player is above the chamber's exit height: the game's map travel (`warpToWarpMarker`, as Bivouac uses it) to the next chamber's spawn, with its loading | likely: built, in-game test pending |
 | Death ends the run, Poes kept | hook on game over; meta-progression in a file beside the save | open |
 | Run UI (boon choice, HUD) | ImGui first (as the dev panel), the game's layouts later | known (ImGui) |
+
+Run director v0 (`runtime/hooks/rogue_run.c`): the chambers come from `rogue-run.txt` next to `totk.exe`
+(`chamber <name> <clear flag> <cx> <cy> <cz> <radius> <exit y> <spawn x> <spawn y> <spawn z>`); the dev panel
+(`TOTK_ROGUE_DEV=1`) starts and stops a run and shows the chamber and the enemies left. Clear flags are borrowed bool
+flags of the game's table until our own are added to it.
 
 ## Weapons (the user's wishlist)
 
