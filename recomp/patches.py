@@ -8,6 +8,8 @@ Lifted code cannot be byte-patched when the game runs, so a patch is applied whe
 
   spin <module> <head> <back-edge> [<back-edge> ...]
 
+  hook <set> <module> <address> <c_function>
+
 <address> is a module offset (hex), <original> the instruction word the module has there (checked; a mismatch stops
 the generator), each <replacement> an instruction word (hex) or `@page:x<n>`, which is `adrp x<n>, <patch page>`
 encoded for the site's address. The patch page is the first 4 KiB page after main's image (layout.py leaves the rest
@@ -25,11 +27,21 @@ a bl (lifted with the site's return address), a b or b.cond / cbz / tbz (its tar
 inside it) or a ret; earlier words must not branch. Every alternative of a site writes the same flags. The generator
 writes patches.h (set names, switches, the page address) next to layout.h for the runtime.
 
+A `hook` line sends the guest function starting at <address> (a function start the generator found) to the runtime C
+function <c_function> while <set> is on. The lifted body is emitted as `f_<addr>_orig` and `f_<addr>`, which every
+direct call, tail branch and the rt_dispatch table use, becomes a stub:
+`if (rt_patch_on[<set>]) { <c_function>(c, f_<addr>_orig); return; } f_<addr>_orig(c);`. The hook, declared
+`void <c_function>(Cpu *c, void (*orig)(Cpu *c))`, sees the guest registers at the function's entry (arguments in
+x0..x7, return address in x30) and runs the original by calling orig(c), before or after its own work or not at all;
+it returns to the caller with the guest's result in x0 as the original would. Hooks live in runtime/hooks/ (one file per
+feature); a hook named here but defined nowhere fails the link. One function takes one hook.
+
 A `spin` line names a spin wait found by tools/spin_waits.py: a loop with head <head> that only another thread can end,
 and the direct branches back to it (module offsets). Each back-edge (checked: a b, b.cond, cbz / cbnz or tbz / tbnz to
 <head>) is lifted as `rt_spin_gate(c, <head>); goto <head>`, which keeps every register and only adds time
 (runtime/kernel.c kern_spin_gate).
 """
+import re
 from pathlib import Path
 
 PAGE = 0x1000
@@ -49,13 +61,18 @@ def adrp(pc, target, rd):
 
 class Table:
     """sets: [(name, env, default)]; sites: {module: {offset: [(set index, [word | ('page', reg)], original)]}} (the
-    alternatives of a site in file order); page."""
+    alternatives of a site in file order); page; hooks: {module: {offset: (set index, c_function)}}."""
 
-    def __init__(self, sets=(), sites=None, page=0, spins=None):
+    def __init__(self, sets=(), sites=None, page=0, spins=None, hooks=None):
         self.sets = list(sets)
         self.sites = sites or {}
         self.page = page
         self.spins = spins or {}   # {module: {back-edge offset: head offset}}
+        self.hooks = hooks or {}
+
+    def hooks_for(self, name, base):
+        """{absolute function start: (set index, c_function)}."""
+        return {base + off: h for off, h in self.hooks.get(name, {}).items()}
 
     def spins_for(self, name, base):
         """{absolute back-edge address: absolute head address}."""
@@ -73,7 +90,7 @@ class Table:
 
 def load(path, mods):
     """Table from a patch file; mods is layout() output [(name, base, size)]."""
-    sets, index, sites, spins = [], {}, {}, {}
+    sets, index, sites, spins, hooks = [], {}, {}, {}, {}
     bases = {n: (b, s) for n, b, s in mods}
     for no, raw in enumerate(Path(path).read_text().splitlines(), 1):
         f = raw.split('#', 1)[0].split()
@@ -112,6 +129,17 @@ def load(path, mods):
                 if b in mod:
                     raise PatchError(f'{where}: {f[1]}+{b:#x} is a back-edge twice')
                 mod[b] = head
+        elif f[0] == 'hook' and len(f) == 5:
+            if f[1] not in index:
+                raise PatchError(f'{where}: unknown set {f[1]}')
+            if f[2] not in bases:
+                raise PatchError(f'{where}: module {f[2]} not in the layout')
+            if not re.fullmatch(r'[A-Za-z_]\w*', f[4]):
+                raise PatchError(f'{where}: {f[4]!r} is not a C function name')
+            off, mod = int(f[3], 16), hooks.setdefault(f[2], {})
+            if off in mod:
+                raise PatchError(f'{where}: {f[2]}+{off:#x} hooked twice')
+            mod[off] = (index[f[1]], f[4])
         else:
             raise PatchError(f'{where}: cannot parse {raw!r}')
     base, size = bases['main'][0], bases['main'][1]
@@ -119,7 +147,7 @@ def load(path, mods):
     nxt = min((b for _, b, _ in mods if b > base), default=None)
     if nxt is not None and page + PAGE > nxt:
         raise PatchError(f'no room for the patch page after main ({page:#x})')
-    return Table(sets, sites, page, spins)
+    return Table(sets, sites, page, spins, hooks)
 
 
 def check(table, mod, name):
@@ -135,6 +163,9 @@ def check(table, mod, name):
         a = mod.base + b
         if not mod.in_text(a) or branch_target(mod.word(a), a) != mod.base + head:
             raise PatchError(f'{name}+{b:#x}: not a direct branch to the spin wait head {name}+{head:#x}')
+    for off in table.hooks.get(name, {}):
+        if not mod.in_text(mod.base + off):
+            raise PatchError(f'{name}+{off:#x}: hooked function outside .text')
 
 
 def branch_target(w, a):
@@ -154,5 +185,9 @@ def header_text(table, marker):
              f'#define RT_PATCH_PAGE {table.page:#x}ull',
              '// X(index, name, env switch, default)',
              '#define RT_PATCH_SETS(X) ' + ' '.join(f'X({i}, {n}, "{e}", {d})' for i, (n, e, d) in
-                                                    enumerate(table.sets)), '']
+                                                    enumerate(table.sets)),
+             '// X(set index, module, offset, c_function): the hooked functions (runtime/hooks/)',
+             '#define RT_PATCH_HOOKS(X) ' + ' '.join(f'X({k}, "{m}", {off:#x}, {fn})' for m, hs in
+                                                     sorted(table.hooks.items()) for off, (k, fn) in sorted(hs.items())),
+             '']
     return '\n'.join(lines)

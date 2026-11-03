@@ -43,6 +43,13 @@ MacNativeGames cannot run on x86-64 as is: its CPU path executes ARM64 code nati
 - Coverage oracle: MacNativeGames' NSO rewriter lists every site where game code touches the OS (SVCs, TLS reads, counter reads, `x18`, exclusive windows, jump tables): 68,968 sites in 1.4.3 `main`. The lifter must handle every one.
 - Memory: guest address equals host address, all below 2^39 (IPC encodes 39-bit addresses). The heap, stacks and the alias region are reserved with `MEM_WRITE_WATCH`, so the graphics back end can ask which pages the CPU wrote since the last upload (`runtime/memory.c`).
 - Indirect branches go through `rt_dispatch` (`runtime/dispatch.c`), which looks the target up in the address table and tail-calls it.
+- Function hooks: a `hook <set> <module> <address> <c_function>` line of the patch table (`recomp/patches.py`) sends a
+  guest function to runtime C while its set is on. The generator emits the lifted body as `f_<addr>_orig` and
+  `f_<addr>` as a stub that calls `<c_function>(c, f_<addr>_orig)`; direct calls, tail branches and the dispatch
+  table all use `f_<addr>`, so one hook sees every caller. Hooks live in `runtime/hooks/`, one file per feature, and
+  call further game code with `rt_call` (`runtime/host.h`). `runtime/hooks/probe.c` (set `hook_probe`,
+  `TOTK_HOOK_PROBE=1`) logs the present-interval controller's calls and is the example. Design after SkyboundTotk's
+  `ENTRY_HOOK` (MIT, github.com/NotRexed/SkyboundTotk); no code was copied.
 - Testing: LAS Recomp's differential harness, every lifted instruction class checked against Unicorn (test-only, never linked into the game).
 
 ### 3. Host

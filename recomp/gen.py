@@ -208,11 +208,12 @@ def partition(est, max_fns, max_bytes, big_fn):
 class Emitter:
     """C for the functions of one module. starts is the set of every function start of the module."""
 
-    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None):
+    def __init__(self, mod, starts, patched=None, reg_locals=regs.LOCALS, callee_saved=True, spins=None, hooks=None):
         self.mod = mod
         self.starts = starts
         self.patched = patched or {}   # {address: [(set index, [replacement words])]} (recomp/patches.py)
         self.spins = spins or {}       # {spin wait back-edge: its head} (recomp/patches.py `spin`)
+        self.hooks = hooks or {}       # {function start: (set index, c_function)} (recomp/patches.py `hook`)
         self.reg_locals = reg_locals   # recomp/regs.py: registers per function in C locals
         self.kept = regs.CALLEE_SAVED if callee_saved else frozenset()   # not reloaded after a call
         self.uses_patches = False
@@ -350,6 +351,8 @@ class Emitter:
         insns = [mod.lift(a) for a in range(entry, end, 4)]
         labels, tables = self.scan(insns, entry, end)
         refs = set()
+        # A hooked function's body is f_<entry>_orig; f_<entry>, which every caller uses, is the stub after it.
+        own = fname(entry) + ('_orig' if entry in self.hooks else '')
         all_labels = 'all' in tables.values()
         if all_labels:
             labels = set(range(entry, end, 4))
@@ -392,13 +395,13 @@ class Emitter:
             cases = ' '.join(f'case {hx(t)}: goto L_{t:x};' for t in range(entry, end, 4))
             redispatch = f'{MUSTTAIL} {fb}(c);'
             out = [f'static void {fb}(Cpu *c);',
-                   f'void {fname(entry)}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});', f'    c->pc = {hx(entry)};',
+                   f'void {own}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});', f'    c->pc = {hx(entry)};',
                    f'    {redispatch}', '}',
                    f'static void {fb}(Cpu *c) {{', f'    switch (c->pc) {{ {cases} default: break; }}',
                    f'    {MUSTTAIL} rt_dispatch(c);']
         else:
             redispatch = f'{MUSTTAIL} rt_dispatch(c);'
-            out = [f'void {fname(entry)}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});']
+            out = [f'void {own}(Cpu *c) {{', f'    FN_ENTER({hx(entry)});']
             if fp.used:
                 out.append('    ' + fp.decl())
 
@@ -501,6 +504,14 @@ class Emitter:
         else:
             out += [line for _, line in body]
         out.append('}')
+        if entry in self.hooks:
+            k, hook = self.hooks[entry]
+            self.uses_patches = True
+            self.stats['hooks'] += 1
+            out += [f'void {hook}(Cpu *c, void (*orig)(Cpu *c));',
+                    f'void {fname(entry)}(Cpu *c) {{',
+                    f'    if (rt_patch_on[{k}]) {{ {hook}(c, {own}); return; }}',
+                    f'    {MUSTTAIL} {own}(c);', '}']
         self.stats['functions'] += 1
         self.stats['instructions'] += len(insns)
         return out, refs
@@ -574,7 +585,8 @@ def _emitter(name):
         mod = Module(name, path, base, 'c')
         e = _W['emitters'][name] = Emitter(mod, set(_W['starts'][name].tolist()),
                                            _W['patches'].for_module(name, base),
-                                           spins=_W['patches'].spins_for(name, base), **_W['opts'])
+                                           spins=_W['patches'].spins_for(name, base),
+                                           hooks=_W['patches'].hooks_for(name, base), **_W['opts'])
     return e
 
 
@@ -694,6 +706,10 @@ def main():
         starts, dstats = discover(mod)
         est = estimate_sizes(mod, starts)
         abs_starts = mod.lo + starts * 4
+        loose = sorted(set(table.hooks_for(name, base)) - set(abs_starts.tolist()))
+        if loose:
+            raise patches.PatchError(f'{name}: hooked addresses that start no function: '
+                                     + ', '.join(f'+{a - base:#x}' for a in loose))
         n = len(starts) if not args.limit else min(args.limit, len(starts))
         ends = np.append(abs_starts[1:], mod.hi)
         chunks = partition(est[:n], args.chunk_fns, args.chunk_bytes, args.big_fn)
