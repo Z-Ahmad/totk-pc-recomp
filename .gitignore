@@ -5,6 +5,7 @@
 /toolchain/
 /.venv/
 /.venv-py314/
+/.venv-modkit/
 __pycache__/
 
 # Personal paths to game files and keys
