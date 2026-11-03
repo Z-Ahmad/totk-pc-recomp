@@ -51,7 +51,15 @@ This is where the roguelike's run director belongs: C in `runtime/` that runs wh
   the C is generated). The generated C reads `if (rt_patch_on[<set>]) { replacement } else { original }`. Replacement
   words may use `@page:x<n>` (`adrp` to the patch page, a 4 KiB page after `main` that the runtime owns) and may end
   in a `bl`, `b`, conditional branch or `ret`.
-- **Host functions at a guest address** (`runtime/dispatch.h` rt_register_host). A host C function registered at an
+- **Function hooks** (`hook <set> main <offset> <c_function>` in `recomp/patches-v121.txt`; `recomp/patches.py`,
+  header). The way to hook one of the game's own functions: the generator emits its body as `f_<addr>_orig` and makes
+  `f_<addr>`, which every direct call, tail branch and the dispatch table use, call
+  `void <c_function>(Cpu *c, void (*orig)(Cpu *c))` while the set is on. The hook sees the arguments in `c->x[0..7]`,
+  runs the original with `orig(c)` before, after or not at all, and leaves the result in `c->x[0]`. Hook code goes in
+  `runtime/hooks/<feature>.c` (compiled automatically). Example: `runtime/hooks/probe.c`, set `hook_probe`
+  (`TOTK_HOOK_PROBE=1`), which logs a function that runs once per frame. The offset must be a function start (the
+  generator checks).
+- **Host functions at a guest address** (`runtime/dispatch.h` rt_register_host), the older per-call-site way. A host C function registered at an
   address on the patch page is what a guest `bl` to that address runs. The working example is the `zstd` set of
   `recomp/patches-v143.txt` with `runtime/ov_zstd.c`: each call site of the game's zstd decoder becomes
   `bl page+0xff0` / `bl page+0xfe0`, and `zstd_register` (a constructor) registers the two host functions there. A
@@ -73,10 +81,9 @@ This is where the roguelike's run director belongs: C in `runtime/` that runs wh
 1. Find the game function and its call sites in 1.2.1 `main` with a disassembler (Ghidra with the Switch loader,
    Capstone, `llvm-objdump`: [docs/architecture.md](../architecture.md), Toolchain). Record offsets from `main`'s base
    and the original instruction words; addresses differ from 1.4.3.
-2. Add a `set` and its `site` lines to `recomp/patches-v121.txt`, with a comment on what each site does, as the
-   existing ones have.
-3. Write the host function in a new `runtime/*.c`, register it at its page slot in a constructor, read its switch
-   through `cfg.c` (every setting is in the table there), and log through `rt_log`.
+2. Add a `set` and a `hook` line to `recomp/patches-v121.txt` (or `site` lines for single instructions), with a
+   comment on what it does, as the existing ones have.
+3. Write the hook in a new `runtime/hooks/<feature>.c` with the signature above, and log through `rt_log`.
 4. Rebuild the game from source ([docs/building.md](../building.md)); the generator stops on a site whose original
    word does not match. Run the lifter's checks the docs name before committing generator changes.
 5. Keep game data out of the repository: offsets and instruction words in `patches-v121.txt` are allowed (the file
