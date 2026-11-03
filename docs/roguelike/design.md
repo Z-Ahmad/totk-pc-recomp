@@ -2,7 +2,8 @@
 
 A Hades-style run on TotK 1.2.1: pick a weapon class, start in the Depths, clear a chamber, Ascend through its sealed
 ceiling to the next one, rising through Depths, Surface and Sky. Sages grant boons; Poes are the currency kept between
-runs. This page holds the game design and, for each piece, how it can be built and how sure that is.
+runs. This page holds the game design and, for each piece, how it can be built and how sure that is. The user's own notes
+are in [wishlist.md](wishlist.md).
 
 How things get built (see [docs/modding/](../modding/README.md)):
 
@@ -58,10 +59,10 @@ and stats are data; its moveset comes from its class.
 | | | chain lightning | Riju's vow lightning is native; Urbosa's Fury in BotW Abilities is a working 1.2.1 area strike | known |
 | Mineru (spirit) | Zonai | unlocks Fuse and Zonai devices | the abilities are unlocked by flags (run starts with them off) | likely |
 | | | Zonai weapons get a bonus | Zonai weapon and part parameters are data | likely |
-| | | Sheikah tech: Remote Bombs, Stasis | rebuild BotW Abilities' Remote Bomb and Stasis as hooks | known (it exists for 1.2.1), large |
+| | | Sheikah tech: Remote Bombs | rebuild BotW Abilities' Remote Bomb as a hook | known (it exists for 1.2.1), large |
 | | | summon construct minions | Mineru's own construct is native; friendly soldier constructs are not | open |
-| Zelda (time) | — | Rewind: Recall does not work on enemies | Self Recall (afiaka87/totk-mods) recalls Link himself: a "rewind on lethal hit, once per chamber" boon (Hades' Death Defiance) | known (Self Recall exists) |
-| | | Stasis | BotW Abilities' Stasis+ (also freezes enemies for five seconds) | known, large |
+| Zelda (time) | time: Stasis, Recall | Rewind: Recall does not work on enemies | Self Recall (afiaka87/totk-mods) recalls Link himself: a "rewind on lethal hit, once per chamber" boon (Hades' Death Defiance) | known (Self Recall exists) |
+| | | Stasis (a time power: Zelda's, not Mineru's) | BotW Abilities' Stasis+ (also freezes enemies for five seconds) | known, large |
 | | | | Recall on projectiles and thrown rocks is native: a boon that sends them back | likely |
 
 ## Next steps
