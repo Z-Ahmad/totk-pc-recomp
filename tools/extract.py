@@ -29,8 +29,8 @@ ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / 'tools' / 'vendor' / 'macnativegames'
 # The vendored scripts import each other by bare module name, so their directory goes on the path before importing them.
 sys.path.insert(0, str(VENDOR))
-from extract_exefs import (common_tickets, container_entries, load_keys, nca_inventory, program_nca,  # noqa: E402
-                           record_offset, require)
+from extract_exefs import (common_tickets, container_entries, load_keys, nca_inventory,  # noqa: E402
+                           program_nca as package_program_nca, record_offset, require)
 from extract_romfs import index_romfs  # noqa: E402
 from extract_update_romfs import copy_range, hactool_prod_keys  # noqa: E402
 
@@ -85,10 +85,47 @@ def version_dir(expected):
     return 'v0' if expected['version'] == 0 else 'v' + expected['display_version'].replace('.', '')
 
 
+BASE_TITLE_ID = '0100F2C0115B6000'
+
+
+def is_bktr(header):
+    """An update Program NCA: one of its sections is a BKTR patch over the base game."""
+    return any(header[0x400 + i * 512 + 4] == 4 for i in range(4))
+
+
+def combined_programs(records):
+    """(base, update) Program NCA records of a package that holds both the base game and an update (an XCI or NSP
+    with the update merged in), else None. The update Program NCA keeps the base title id; its BKTR section tells it
+    apart."""
+    programs = [(r, h) for r, h in records if r['content_type'] == 0 and r['title_id'] == BASE_TITLE_ID]
+    if len(programs) != 2:
+        return None
+    base =[p for p in programs if not is_bktr(p[1])]
+    updates = [p for p in programs if is_bktr(p[1])]
+    return (base[0], updates[0]) if len(base) == 1 and len(updates) == 1 else None
+
+
+def program_nca(records, update=False):
+    """extract_exefs.program_nca, which also takes a combined base-and-update package: the base or the update Program
+    NCA of it is picked and checked alone, so one file can be given as both the base game and the update."""
+    pair = combined_programs(records)
+    if pair:
+        records = [pair[1] if update else pair[0]]
+    return package_program_nca(records, update=update)
+
+
 # The embeddable Python (a ._pth file) does not put a script's directory on sys.path, so a vendored script that imports
 # its siblings fails when started by path. This stub adds the directory, then runs the script as __main__.
 RUN_SCRIPT = ('import os, runpy, sys; p = sys.argv[1]; sys.path.insert(0, os.path.dirname(p)); sys.argv = sys.argv[1:]; '
               "runpy.run_path(p, run_name='__main__')")
+
+
+# A vendored extractor (tools/vendor/macnativegames) run with program_nca of this file in place of its own, so it
+# reads combined packages too while the vendored files stay unchanged. tools/ is three folders above the script.
+RUN_VENDOR = ('import importlib, os, sys; p = sys.argv[1]; d = os.path.dirname(p); '
+              'sys.path[:0] = [d, os.path.dirname(os.path.dirname(d))]; sys.argv = sys.argv[1:]; import extract; '
+              'm = importlib.import_module(os.path.splitext(os.path.basename(p))[0]); '
+              'm.program_nca = extract.program_nca; m.main()')
 
 
 def run_logged(command, log, source=None):
@@ -97,7 +134,7 @@ def run_logged(command, log, source=None):
     args = [str(c) for c in command]
     env = dict(os.environ, PYTHONIOENCODING='utf-8')   # its messages may name non-ASCII paths
     with log.open('wb') as out:
-        code = subprocess.run([args[0], '-c', RUN_SCRIPT, *args[1:]], stdout=out, stderr=subprocess.STDOUT,
+        code = subprocess.run([args[0], '-c', RUN_VENDOR, *args[1:]], stdout=out, stderr=subprocess.STDOUT,
                               env=env).returncode
     if code and source:
         damage = DAMAGE.search(log.read_text(encoding='utf-8', errors='replace'))
@@ -176,7 +213,7 @@ def program_ncas(base, update, keys_path):
     for source, is_update in ((base, False), (update, True)):
         with source.open('rb') as f:
             kind, entries = container_entries(f, source.stat().st_size)
-            require(not is_update or kind == 'nsp', 'Update must be an NSP')
+            require(not is_update or kind == 'nsp' or source == base, 'Update must be an NSP')
             for rights, key in common_tickets(f, entries).items():
                 require(tickets.get(rights, key) == key, 'Conflicting common tickets')
                 tickets[rights] = key
@@ -281,7 +318,8 @@ def main():
                         default=ROOT / 'toolchain' / 'hactool' / ('hactool.exe' if os.name == 'nt' else 'hactool'))
     parser.add_argument('--base', type=Path, help='base game (default: input.base of the config)')
     parser.add_argument('--update', type=Path, action='append',
-                        help='an update NSP, repeatable (default: input.updates of the config)')
+                        help='an update NSP, repeatable (default: input.updates of the config); the base game file '
+                             'itself when it holds the update too')
     parser.add_argument('--keys', type=Path, help='prod.keys (default: input.keys of the config)')
     parser.add_argument('--work', type=Path, help='output directory with extracted/ and logs/ (default: work.dir of '
                                                   'the config, else build)')

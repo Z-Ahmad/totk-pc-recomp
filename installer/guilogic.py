@@ -161,7 +161,8 @@ class Form:
             for name in ('base', 'update', 'keys'):
                 value = getattr(self, name).strip()
                 if not value:
-                    found.append(f'ui.need_{name}')
+                    if name != 'update':   # left empty: the base game file holds the update (the CLI's default)
+                        found.append(f'ui.need_{name}')
                 elif not Path(value).is_file():
                     found.append(f'ui.missing_{name}')
             if self.lang not in ini.LANGUAGES:

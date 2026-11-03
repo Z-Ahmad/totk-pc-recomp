@@ -37,8 +37,8 @@ from .runner import InstallError, Step
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'tools'))
 import extract  # noqa: E402
 import shader_list  # noqa: E402
-from extract_exefs import (common_tickets, container_entries, load_keys, nca_ctr_key, nca_inventory,  # noqa: E402
-                           program_nca)
+from extract import program_nca  # noqa: E402   # takes a combined base-and-update package too
+from extract_exefs import common_tickets, container_entries, load_keys, nca_ctr_key, nca_inventory  # noqa: E402
 
 GiB = 1 << 30
 DEST_EXTRA = 4 * GiB      # beside the RomFS: shader and pipeline caches (about 2 GB), exefs, totk.exe, seed files
@@ -447,8 +447,6 @@ class Check(Step):
         except ValueError as e:
             raise_if_damaged(e, name, path)
             raise InstallError('check.not_game_file', input=name) from None
-        if is_update and kind != 'nsp':
-            raise InstallError('check.update_not_nsp')
         try:
             tickets = common_tickets(f, entries)
         except ValueError as e:
@@ -463,6 +461,9 @@ class Check(Step):
                 raise InstallError('check.keys_wrong', input=name) from None
             raise_if_damaged(e, name, path)
             raise InstallError('check.file_unreadable', input=name, detail=str(e)) from None
+        # An XCI is taken as the update only when it holds the base game and the update together.
+        if is_update and kind != 'nsp' and not extract.combined_programs(records):
+            raise InstallError('check.update_not_nsp')
         try:
             record, header = program_nca(records, update=is_update)
         except ValueError as e:
@@ -646,6 +647,9 @@ class Extract(Step):
         for name, path in (('base', base), ('update', update)):
             known = ctx.state['inputs'].get(name, {})
             st = path.stat()
+            if name == 'update' and path == base:   # one file holds both: hashed once
+                inputs[name] = inputs['base']
+                continue
             if known.get('size') == st.st_size and known.get('mtime_ns') == st.st_mtime_ns and known.get('sha256'):
                 inputs[name] = known
                 continue

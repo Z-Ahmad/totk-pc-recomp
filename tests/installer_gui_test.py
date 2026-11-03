@@ -193,7 +193,7 @@ class FormTest(unittest.TestCase):
         self.assertEqual(self.form().problems(), [])
 
     def test_empty_form(self):
-        self.assertEqual(Form().problems(), ['ui.need_dest', 'ui.need_base', 'ui.need_update', 'ui.need_keys',
+        self.assertEqual(Form().problems(), ['ui.need_dest', 'ui.need_base', 'ui.need_keys',
                                              'ui.need_lang'])
 
     def test_missing_files(self):

@@ -9,7 +9,8 @@ holds only the game; the installer and its tools stay outside it.
 1. Downloads `TotK-Setup-<version>-windows.zip` from GitHub Releases (none is published yet), unpacks it anywhere and
    starts `TotK-Setup.exe`.
 2. Picks:
-   - the base game (XCI or NSP) and the 1.1.0, 1.2.1 or 1.4.3 update (NSP);
+   - the base game (XCI or NSP) and the 1.1.0, 1.2.1 or 1.4.3 update (NSP), or one XCI or NSP that holds both (the
+     update field then stays empty);
    - their `prod.keys`;
    - optionally the firmware folder (`system/Contents/registered` of an unpacked firmware or an emulator's install),
      needed for Chinese, Korean and Traditional Chinese text;
@@ -99,6 +100,9 @@ needs the release folder the setup ran from: a moved or deleted release folder m
 python -m installer --base FILE --update FILE --keys FILE --lang CODE --dest DIR [--firmware DIR] [--root DIR] [--temp DIR] [--verify]
 ```
 
+- `--update` defaults to `--base`: a base game file with the update merged in (an XCI or NSP holding both Program NCAs)
+  serves as both. `tools/extract.py` `program_nca` picks the base or the update Program NCA of it by its BKTR section and
+  hands the vendored extractors that one alone (`RUN_VENDOR`), so `tools/vendor/` stays unchanged.
 - On a folder with `totk-install.json` only `--dest` is needed; the game files only when the extraction must run again.
 - `--firmware DIR` is the folder holding the firmware NCAs: an unpacked firmware, or the emulators' installed
   `Contents/registered` (the parent `Contents` folder works too). It is read only with Chinese, Korean or Traditional

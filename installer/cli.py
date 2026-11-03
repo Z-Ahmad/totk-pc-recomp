@@ -48,7 +48,8 @@ def cancel(signum, frame):
 def main(argv=None):
     ap = Parser(prog='python -m installer', description=__doc__.splitlines()[0])
     ap.add_argument('--base', type=Path, help='base game, XCI or NSP')
-    ap.add_argument('--update', type=Path, help='the update NSP: 1.1.0, 1.2.1 or 1.4.3')
+    ap.add_argument('--update', type=Path, help='the update NSP: 1.1.0, 1.2.1 or 1.4.3 (default: the base game file, '
+                                                 'when it holds the update too)')
     ap.add_argument('--keys', type=Path, help='prod.keys')
     ap.add_argument('--firmware', type=Path, help='Switch firmware folder (Contents/registered) for the shared fonts '
                                                    'of Chinese, Korean and Traditional Chinese text')
@@ -59,6 +60,8 @@ def main(argv=None):
                                               'the install folder on Linux, build/install-temp in a repository)')
     ap.add_argument('--verify', action='store_true', help='hash every kept file, also those this release made')
     args = ap.parse_args(argv)
+    if args.base and not args.update:   # a base game file with the update merged in serves as both
+        args.update = args.base
 
     # The window cancels with Ctrl+Break to the installer's process group (CREATE_NEW_PROCESS_GROUP), which also reaches
     # the tools it runs; Python's default for it ends the process without recording anything.
