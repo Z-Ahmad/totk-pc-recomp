@@ -25,7 +25,7 @@ wiring is ours; **open** = not yet known to be possible.
 
 | Piece | Approach | Confidence |
 |---|---|---|
-| Chamber exit sealed until cleared | `StopCeilingClipperAreaNoMerge` with `Presence {FlagName, IsNegation}`; Ascend allowed underground by an `Area` + `EnableUseUndergroundCeilingClipperArea` AI group (Depths tiles do this) | likely: in-game test of the live flag switch pending |
+| Chamber exit sealed until cleared | `StopCeilingClipperAreaNoMerge` with `Presence {FlagName, IsNegation}`; Ascend allowed underground by an `Area` + `EnableUseUndergroundCeilingClipperArea` AI group (Depths tiles do this) | known: tested in game (Lookout Landing shelter, 2026-11-02): the blocker appears and disappears the moment the flag changes, even while Ascend is aimed at the ceiling |
 | Setting run flags | `runtime/hooks/rogue_flags.c` (the game's setBool), dev panel `TOTK_ROGUE_DEV=1` | known (built) |
 | Chamber cleared | defeat queries / counter flag in data, or a hook on enemy death | open |
 | Moving to the next chamber | warp to a named `DestinationAnchor` after the Ascend | open |
@@ -66,7 +66,6 @@ and stats are data; its moveset comes from its class.
 
 ## Next steps
 
-1. In-game test of the sealed exit (live `Presence` switch on a flag).
-2. Read afiaka87/totk-mods for the 1.2.1 functions behind damage, status effects and abilities; record them in the
+1. Read afiaka87/totk-mods for the 1.2.1 functions behind damage, status effects and abilities; record them in the
    recon notes and pick the first boon to build as a hook (candidates: Sidon's shield, Tulin's double jump).
-3. Chamber-cleared detection and the warp to the next chamber.
+2. Chamber-cleared detection and the warp to the next chamber.
